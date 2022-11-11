@@ -22,13 +22,7 @@ public struct New: ParsableCommand {
     @Argument(help: "The output file with the BIP39 compatible word list.")
     var outputFile: String
     
-
-    public init(inputFile: String, numberOfLinesToRead: Int, language: String, outputFile: String) {
-        self.inputFile = inputFile
-        self.numberOfLinesToRead = numberOfLinesToRead
-        self.language = language
-        self.outputFile = outputFile
-    }
+    public init() {}
 }
 
 public extension New {
@@ -47,14 +41,15 @@ public extension New {
         
         let corpus = Corpus(fileHandle: corpusFileHandle)
                             
-        var mnemonize = Mnemonize(
+        let mnemonizer = Mnemonizer(
             corpus: corpus,
             numberOfLinesToRead: numberOfLinesToRead,
             language: language,
             outputFile: outputFileHandle
         )
         
-        let mnemonized = mnemonize.make()
+        let bip39WordList = try mnemonizer.mnemonize()
+        print(bip39WordList)
     }
 }
                             

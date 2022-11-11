@@ -19,7 +19,7 @@ let package = Package(
             name: "MnemonizeTests",
             dependencies: ["Mnemonize"]
         ),
-        
+
         .executableTarget(
             name: "New",
             dependencies: [
@@ -27,12 +27,12 @@ let package = Package(
                 "Mnemonize",
             ]
         ),
-        
+
         .executableTarget(
             name: "Swedish",
             dependencies: [
-                "New"
+                "New",
             ]
-        )
+        ),
     ]
 )

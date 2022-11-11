@@ -35,6 +35,6 @@ public extension Mnemonizer {
     
     @discardableResult
     func mnemonize() throws -> BIP39WordList {
-        
+        fatalError()
     }
 }
