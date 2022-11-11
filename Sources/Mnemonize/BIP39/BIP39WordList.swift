@@ -15,35 +15,31 @@ import Collections
 public struct BIP39WordList {
     public let words: OrderedSet<String>
     public let language: String
-    public static let defaultThreshold: Double = 0.92
+    
 
     init(
         words: OrderedSet<String>,
         language: String,
-        validation: Validation,
-        stringSimilarityThreshold: Double = Self.defaultThreshold
+        validation: Validation
     ) throws {
         guard words.count == 2048 else {
             throw Error.expectedExactly2048Words(butGot: words.count)
         }
         
-        if
-            validation.contains(.smartSectionOfWords),
-            !Self.unambiguouslyIdentifiableByFirstFourLetters(words)
+        if let input = validation.unambiguouslyIdentifiableInput,
+           !Self.unambiguouslyIdentifiableByFirst(n: input, words)
         {
             throw Error.wordsAreNotUnambigiouslyIdentifiedByFirstFourLetters
         }
         
-        if
-            validation.contains(.similarWordsAvoided),
-            let similarWords = Self.similarWords(words, maxSimilarityThreshold: stringSimilarityThreshold)
+        if let input = validation.similarWordsDetectionInput,
+           let similarWords = Self.similarWords(words, input: input)
         {
             throw Error.similarWordsFound(similarWords)
         }
         
-        if
-            validation.contains(.sortedLexicongraphically),
-            words.sorted() != words.elements
+        if let input = validation.sorting,
+           Self.areSorted(words: words, input: input)
         {
             throw Error.wordsAreNotLexicongraphicallySorted
         }
@@ -55,30 +51,48 @@ public struct BIP39WordList {
 
 public extension BIP39WordList {
     
-    struct Validation: OptionSet {
-        /// The words follow these rules
-        /// * First four letters unambiguously identify the word
-        /// *
-        public let rawValue: Int
-        public init(rawValue: Int) {
-            self.rawValue = rawValue
-        }
+    static func areSorted(words: OrderedSet<String>, input: SortingInput) -> Bool {
+        input.sort(words) != words.elements
+    }
+    
+    struct Validation {
+        public let unambiguouslyIdentifiableInput: UnambiguouslyIdentifiableInput?
+        public let similarWordsDetectionInput: SimilarWordsInput?
+        public let sorting: SortingInput?
     }
 }
-public extension BIP39WordList.Validation {
+public struct UnambiguouslyIdentifiableInput {
+    public let charCount: Int
     
-    /// First four letters unambiguously identify the word
-    static let smartSectionOfWords      = Self(rawValue: 1 << 0)
+    /// Strict according to [`BIP39`][bip]:
+    ///
+    /// "the wordlist is created in such a way that it's enough to type the **first four** letters to unambiguously identify the word"
+    ///
+    /// [bip]: https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki
+    public static let strict = Self(charCount: 4)
     
-    /// Similar words avoided: Word pairs like "build" and "built", "woman" and "women", or "quick" and "quickly" ought to be avoided.
-    static let similarWordsAvoided      = Self(rawValue: 1 << 1)
+}
+public struct SortingInput {
     
-    /// Sorted lexicongraphically
-    static let sortedLexicongraphically = Self(rawValue: 1 << 2)
+    public let sort: (OrderedSet<String>) -> [String]
+    
+    public static let lexicongraphically = Self(sort: { $0.sorted() })
+    
+    /// Strict according to [`BIP39`][bip]:
+    ///
+    /// "the wordlist is sorted which allows for more efficient lookup of the code words"
+    ///
+    /// [bip]: https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki
+    public static let strict: Self = .lexicongraphically
 }
 
 public extension BIP39WordList.Validation {
-    static let strict: Self = [.smartSectionOfWords, .similarWordsAvoided, .sortedLexicongraphically]
+    
+    static let englishStrict = Self(
+        unambiguouslyIdentifiableInput: .strict,
+        similarWordsDetectionInput: .englishStrict,
+        sorting: .strict
+    )
 }
 
 public extension BIP39WordList {
@@ -92,10 +106,11 @@ public extension BIP39WordList {
 
 public extension BIP39WordList {
     
-    static func unambiguouslyIdentifiableByFirstFourLetters(
+    static func unambiguouslyIdentifiableByFirst(
+        n input: UnambiguouslyIdentifiableInput,
         _ words: OrderedSet<String>
     ) -> Bool {
-        unambiguouslyIdentifiableByFirst(4, lettersIn: words)
+        unambiguouslyIdentifiableByFirst(input.charCount, lettersIn: words)
     }
     
     static func unambiguouslyIdentifiableByFirst(
@@ -107,26 +122,9 @@ public extension BIP39WordList {
         }).count == words.count
     }
     
-    struct SimilarWords: Sendable, Hashable, Comparable {
-        public var word0: String
-        public var word1: String
-        public var similarity: Double
-        public static func < (lhs: Self, rhs: Self) -> Bool {
-            lhs.similarity < rhs.similarity
-        }
-    }
-    struct SimilarWordsReport: Sendable, Hashable {
-        public var similarWords: SimilarWords
-        public let maxSimilarityThreshold: Double
-        
-    }
-   
-    
-    /// Using [`Hamming distance`][alg]
-    /// [alg]: https://en.wikipedia.org/wiki/Hamming_distance
     static func similarWords(
         _ words: OrderedSet<String>,
-        maxSimilarityThreshold: Double
+        input: SimilarWordsInput
     ) -> SimilarWordsReport? {
    
         var maxSimilarity = SimilarWords(
@@ -155,11 +153,11 @@ public extension BIP39WordList {
                 }
                 sum += similarity.similarity
                 wordsChecked += 1
-                guard similarity.similarity <= maxSimilarityThreshold else {
+                guard similarity.similarity <= input.threshold else {
                     print("'\(word)' & '\(other)' are too similar (\(similarity.similarity * 100)%)")
                     return .init(
                         similarWords: similarity,
-                        maxSimilarityThreshold: maxSimilarityThreshold
+                        input: input
                     )
                 }
 //                if similarity.similarity > 0.5 {
@@ -169,7 +167,7 @@ public extension BIP39WordList {
             }
         }
         let averageSimilarity = sum / Double(wordsChecked)
-        print("✅ no words are too similar. Max threshold of: \(maxSimilarityThreshold). averageSimilarity: \(averageSimilarity), Min similarity: \(minSimilarity), max similartiy: \(maxSimilarity)")
+        print("✅ no words are too similar. Max threshold of: \(input.threshold). averageSimilarity: \(averageSimilarity), Min similarity: \(minSimilarity), max similartiy: \(maxSimilarity)")
         return nil
     }
     
@@ -187,107 +185,4 @@ public extension BIP39WordList {
             )
         )
     }
-}
-
-
-public struct DistanceInput: Sendable, Hashable {
-    public static func == (lhs: Self, rhs: Self) -> Bool {
-        guard lhs.worthOfFirstChar == rhs.worthOfFirstChar &&
-        lhs.sameLengthValueScaling == rhs.sameLengthValueScaling &&
-        lhs.diffentLengthValueScaling == rhs.diffentLengthValueScaling &&
-        lhs.similarCharacterMultiplier == rhs.similarCharacterMultiplier
-        else {
-            return false
-        }
-        guard lhs.similarCharacters.count == rhs.similarCharacters.count else {
-            return false
-        }
-        for index in 0..<lhs.similarCharacters.count {
-            let l = lhs.similarCharacters[index]
-            let r = rhs.similarCharacters[index]
-            guard (l.0 == r.0 && l.1 == r.1) || (l.0 == r.1 && l.1 == r.0) else {
-               continue
-            }
-            return false
-        }
-        return true
-    }
-    public func hash(into hasher: inout Hasher) {
-        hasher.combine(worthOfFirstChar)
-        hasher.combine(sameLengthValueScaling)
-        hasher.combine(diffentLengthValueScaling)
-        hasher.combine(similarCharacterMultiplier)
-    }
-    
-    
-    public let worthOfFirstChar: Double
-    public let sameLengthValueScaling: Double
-    public let diffentLengthValueScaling: Double
-    public let similarCharacterMultiplier: Double
-    public let similarCharacters: [(Character, Character)]
-
-    public init(
-        worthOfFirstChar: Double = 0.5,
-        sameLengthValueScaling: Double = 0.5,
-        diffentLengthValueScaling: Double = 0.5,
-        similarCharacterMultiplier: Double = 0.4,
-        similarCharacters: [(Character, Character)] = [
-            ("a", "e"),
-            ("d", "t"),
-        ]
-    ) {
-        self.worthOfFirstChar = worthOfFirstChar
-        self.sameLengthValueScaling = sameLengthValueScaling
-        self.diffentLengthValueScaling = diffentLengthValueScaling
-        self.similarCharacterMultiplier = similarCharacterMultiplier
-        self.similarCharacters = similarCharacters
-    }
-    public static let `default` = Self()
-}
-
-public func cyonDistance(
-    between word0: String,
-    and word1: String,
-    input: DistanceInput = .default
-) -> Double {
-    guard !word0.isEmpty else { return 0 }
-    guard !word1.isEmpty else { return 0 }
-    guard word0 != word1 else { return 1 }
-    
-    let lengths = [word0, word1].map(\.count)
-    let shortestLength = lengths.min()!
-    let longestLength = lengths.max()!
-    
-    /// Between 0-1.0
-    var similarity: Double = 0
-    var positionWorth = input.worthOfFirstChar
-    for offset in 0..<shortestLength {
-        let char0 = word0[String.Index(utf16Offset: offset, in: word0)]
-        let char1 = word1[String.Index(utf16Offset: offset, in: word1)]
-        if char0 == char1 {
-            similarity += positionWorth
-        } else if input.similarCharacters
-            .contains(where: {
-                ($0.0 == char0 && $0.1 == char1) ||
-                ($0.0 == char1 && $0.1 == char0)
-            })
-        {
-            similarity += (input.similarCharacterMultiplier * positionWorth)
-        } else {
-            similarity -= positionWorth
-        }
-        
-        positionWorth *= input.sameLengthValueScaling
-    }
-    let lengthDelta = longestLength - shortestLength
-    
-    for _ in 0..<lengthDelta {
-        similarity -= positionWorth
-        positionWorth *= input.diffentLengthValueScaling
-    }
-    guard similarity >= 0 else { return 0.0 }
-
-    assert(similarity <= 1.0)
-
-    return similarity
 }
