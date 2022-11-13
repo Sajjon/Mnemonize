@@ -66,23 +66,21 @@ public extension Mnemonizer {
                 continue
             }
 
-            func apa(
-                similarityReason: Choose.Reason,
+            let wordsSoFar = OrderedSet<String>((parsedLines + [parsedLine]).map { $0.wordForm.lowercasedWord })
+            
+            func wordConflicts(
+                reason similarityReason: Choose.Reason,
                 checkForConflict: (OrderedSet<String>) -> ConflictingWords?
             ) -> Bool {
-                func asWords() -> OrderedSet<String> { .init((parsedLines + [parsedLine]).map { $0.wordForm.lowercasedWord }) }
-                guard let conflict = checkForConflict(asWords()) else { return false }
-                let referenceString = conflict.word0 == parsedLine.wordForm.lowercasedWord ? conflict.word1 : conflict.word0
-                
-                precondition(referenceString != parsedLine.wordForm.lowercasedWord)
-                let reference = parsedLines.first(where: { $0.wordForm.lowercasedWord == referenceString })!
-                
+                guard
+                    let conflict = checkForConflict(wordsSoFar),
+                    let reference = parsedLines.first(where: {
+                        let needle = conflict.word0 == parsedLine.wordForm.lowercasedWord ? conflict.word1 : conflict.word0
+                        return $0.wordForm.lowercasedWord == needle
+                    }) else
+                { return false }
+              
                 parsedLines.removeAll(where: { $0 == reference })
-                
-                assert(
-                    checkForConflict(asWords()) == nil
-                )
-                
                 let key = Choose(reason: similarityReason, reference: reference)
                 if var existing = choices[key] {
                     existing.append(parsedLine)
@@ -95,7 +93,7 @@ public extension Mnemonizer {
             
             if
                 let input = bip39Validation.unambiguouslyIdentifiableInput,
-                apa(similarityReason: .ambigiousByFirstNLetters, checkForConflict: {
+                wordConflicts(reason: .ambigiousByFirstNLetters, checkForConflict: {
                     BIP39WordList.Validation.unambiguouslyIdentifiableByFirst(n: input, $0)
                 })
             {
@@ -104,7 +102,7 @@ public extension Mnemonizer {
             
             if
                 let input = bip39Validation.similarWordsDetectionInput,
-                apa(similarityReason: .similar, checkForConflict: {
+                wordConflicts(reason: .similar, checkForConflict: {
                     BIP39WordList.Validation.similarWords($0, input: input)?.conflictingWords
                 })
             {
@@ -113,7 +111,6 @@ public extension Mnemonizer {
             
             parsedLines.append(parsedLine)
             
-            
         }
         
         if
@@ -121,16 +118,18 @@ public extension Mnemonizer {
                 .filter({ $0.key.reason == .ambigiousByFirstNLetters }),
             !amb.isEmpty
         {
-            print(
-                "\n\n🔮 CHOOSE BETWEEN AMBIGIOUS WORDS:\n" +
-                amb
-                    .map {
-                        [
-                            "Ref: '\($0.key.reference.wordForm.lowercasedWord)' - alternatives",
-                            $0.value.map { $0.wordForm.lowercasedWord }.joined(separator: "\n\t")
-                        ].joined(separator: "\n")
-                    }.joined(separator: "\n\n")
-            )
+//            print(
+//                "\n\n🔮 CHOOSE BETWEEN AMBIGIOUS WORDS:\n" +
+//                amb
+//                    .map {
+//                        [
+//                            "Ref: '\($0.key.reference.wordForm.lowercasedWord)' - alternatives",
+//                            $0.value.map { $0.wordForm.lowercasedWord }.joined(separator: "\n\t")
+//                        ].joined(separator: "\n")
+//                    }.joined(separator: "\n\n")
+//            )
+        } else {
+            print("✨ No ambigious words found.")
         }
         
         if
@@ -147,12 +146,15 @@ public extension Mnemonizer {
                         ].joined(separator: "\n")
                     }.joined(separator: "\n\n")
             )
+        } else {
+            print("✨ No similar words found.")
         }
         
         let unsorted = Set(parsedLines.map { $0.wordForm.lowercasedWord })
         let sorted = OrderedSet(unsorted.sorted())
         
-        print(sorted)
+//        print(sorted)
+        
         
         return try BIP39WordList(
             words: sorted,

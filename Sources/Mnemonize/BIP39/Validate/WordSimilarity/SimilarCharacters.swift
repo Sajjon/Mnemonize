@@ -6,49 +6,61 @@
 //
 
 import Foundation
+import Collections
+
+extension OrderedSet: @unchecked Sendable where Element: Sendable {}
 
 public extension BIP39WordList.Validation.WordSimilarity {
-    struct SimilarCharacters: Sendable, Hashable {
-        public let pairs: [(Character, Character)]
-    }
-}
-public extension BIP39WordList.Validation.WordSimilarity.SimilarCharacters {
-    func contains(_ needle: (Character, Character)) -> Bool {
-        pairs
-            .contains(where: {
-                ($0.0 == needle.0 && $0.1 == needle.1) ||
-                ($0.0 == needle.1 && $0.1 == needle.0)
-            })
+    struct CorrelatedCharactersSet: Sendable, Hashable {
+        
+        public let set: OrderedSet<CorrelatedCharacters>
+        
+        public init(set: OrderedSet<CorrelatedCharacters>) {
+            self.set = set
+        }
     }
 }
 
-public extension BIP39WordList.Validation.WordSimilarity.SimilarCharacters {
-    static let english = Self(pairs: [
-        ("a", "e"),
-        ("d", "t"),
+public extension BIP39WordList.Validation.WordSimilarity.CorrelatedCharactersSet {
+    
+    struct CorrelatedCharacters: Sendable, Hashable {
+       
+        public let char0: Character
+        public let char1: Character
+        public let correlationFactor: Double
+       
+        public static let defaultCorrelationFactor: Double = 0.4
+       
+        public init(
+            char0: Character,
+            char1: Character,
+            correlationFactor: Double = Self.defaultCorrelationFactor
+        ) {
+            self.char0 = char0
+            self.char1 = char1
+            self.correlationFactor = correlationFactor
+        }
+        public init(_ char0: Character, _ char1: Character, correlationFactor: Double = Self.defaultCorrelationFactor) {
+            self.init(
+                char0: char0,
+                char1: char1,
+                correlationFactor: correlationFactor
+            )
+        }
+    }
+    
+    func contains(_ needle: (Character, Character)) -> CorrelatedCharacters? {
+        self.set.first(where: {
+            $0.char0 == needle.0 && $0.char1 == needle.1 ||
+            $0.char0 == needle.1 && $0.char1 == needle.0
+        })
+    }
+}
+
+public extension BIP39WordList.Validation.WordSimilarity.CorrelatedCharactersSet {
+    static let english = Self(set: [
+        .init("a", "e"),
+        .init("d", "t"),
     ])
 }
 
-public extension BIP39WordList.Validation.WordSimilarity.SimilarCharacters {
-    static func == (lhs: Self, rhs: Self) -> Bool {
-        guard lhs.pairs.count == rhs.pairs.count else {
-            return false
-        }
-        for index in 0..<lhs.pairs.count {
-            let l = lhs.pairs[index]
-            let r = rhs.pairs[index]
-            guard (l.0 == r.0 && l.1 == r.1) || (l.0 == r.1 && l.1 == r.0) else {
-                continue
-            }
-            return false
-        }
-        return true
-    }
-    
-    func hash(into hasher: inout Hasher) {
-        for pair in pairs {
-            hasher.combine(pair.0)
-            hasher.combine(pair.1)
-        }
-    }
-}

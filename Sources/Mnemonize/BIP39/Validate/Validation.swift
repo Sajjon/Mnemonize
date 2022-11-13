@@ -109,20 +109,14 @@ public extension BIP39WordList.Validation {
                 sum += similarity.similarity
                 wordsChecked += 1
                 guard similarity.similarity <= input.threshold else {
-                    print("'\(word)' & '\(other)' are too similar (\(similarity.similarity * 100)%)")
                     return .init(
                         similarWords: similarity,
                         input: input
                     )
                 }
-//                if similarity.similarity > 0.5 {
-//                    print("'\(word)' ~!~ '\(other)' \(similarity.similarity * 100)%")
-//                }
-//                print("'\(word)' ~!~ '\(other)' \(similarity.similarity * 100)%")
             }
         }
-        let averageSimilarity = sum / Double(wordsChecked)
-//        print("✅ no words are too similar. Max threshold of: \(input.threshold). averageSimilarity: \(averageSimilarity), Min similarity: \(minSimilarity), max similartiy: \(maxSimilarity)")
+//        let averageSimilarity = sum / Double(wordsChecked)
         return nil
     }
     

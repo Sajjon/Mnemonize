@@ -28,8 +28,8 @@ public func cyonDistance(
         let char1 = word1[String.Index(utf16Offset: offset, in: word1)]
         if char0 == char1 {
             similarity += positionWorth
-        } else if input.similarCharacters.contains((char0, char1)) {
-            similarity += (input.similarCharacterMultiplier * positionWorth)
+        } else if let correlated = input.correlatedCharactersSet.contains((char0, char1)) {
+            similarity += (correlated.correlationFactor * positionWorth)
         } else {
             similarity -= positionWorth
         }

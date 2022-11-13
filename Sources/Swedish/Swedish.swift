@@ -48,7 +48,11 @@ public extension Swedish {
         )
         
         let bip39WordList = try mnemonizer.mnemonize()
-        print(bip39WordList)
+        print("🇸🇪  Found, word list of #\(bip39WordList.words.count) words:")
+        bip39WordList.words.forEach {
+            print($0)
+        }
+        print("🇸🇪  Done, word list of #\(bip39WordList.words.count) words ✅")
     }
 }
 
@@ -57,23 +61,27 @@ public extension BIP39WordList.Validation {
     
     static let swedishStrict = Self(
         unambiguouslyIdentifiableInput: .strict,
-        similarWordsDetectionInput: .englishStrict,
+        similarWordsDetectionInput: .swedishStrict,
         sorting: .strict
     )
 }
 
 public extension BIP39WordList.Validation.WordSimilarity.Input {
-    
-    
-    /// Strict according to [`BIP39`][bip], which means that similar words are avoided:
-    ///
-    /// "word pairs like "build" and "built", "woman" and "women", or "quick" and "quickly"
-    /// not only make remembering the sentence difficult but are also more error
-    /// prone and more difficult to guess"
-    ///
-    /// [bip]: https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki
-    static let englishStrict = Self(
+
+    static let swedishStrict = Self(
         threshold: Self.defaultThreshold,
-        similarWordPairsInput: .englishDefault
+        similarWordPairsInput: .swedishDefault
     )
+}
+
+public extension BIP39WordList.Validation.WordSimilarity.SimilarWordPairsInput {
+    static let swedishDefault = Self(correlatedCharactersSet: .swedish)
+}
+
+public extension BIP39WordList.Validation.WordSimilarity.CorrelatedCharactersSet {
+    static let swedish = Self(set: [
+        .init("å", "ä", correlationFactor: 0.7),
+        .init("ö", "o", correlationFactor: 0.6),
+        .init("n", "t", correlationFactor: 2), // "åren" vs "året"
+    ])
 }
