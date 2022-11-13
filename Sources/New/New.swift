@@ -27,22 +27,21 @@ public struct New: ParsableCommand {
 
 public extension New {
     mutating func run() throws {
+        let pwd = FileManager.default.homeDirectoryForCurrentUser.appending(path: "Developer/Mnemonize")
+     
+        
         guard
             let outputFileHandle = FileHandle(forWritingAtPath: outputFile)
         else {
             throw Error.failedToOpenOutputFile(atPath: outputFile)
         }
         
-        guard
-            let corpusFileHandle = FileHandle(forReadingAtPath: inputFile)
-        else {
-            throw Error.failedToOpenInputFile(atPath: inputFile)
-        }
-        
-        let corpus = Corpus(fileHandle: corpusFileHandle)
+   
+        let corpus = try Corpus(file: pwd.appending(path: inputFile))
                             
         let mnemonizer = Mnemonizer(
             corpus: corpus,
+            lineParser: .init(parse: { _ in fatalError() }),
             numberOfLinesToRead: numberOfLinesToRead,
             language: language,
             outputFile: outputFileHandle

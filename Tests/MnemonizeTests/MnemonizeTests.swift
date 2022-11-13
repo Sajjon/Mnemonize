@@ -43,14 +43,14 @@ final class MnemonizeTests: XCTestCase {
     
     func test_bip39_invalid() throws {
         
-        let report = try XCTUnwrap(BIP39WordList.similarWords(
+        let report = try XCTUnwrap(BIP39WordList.Validation.similarWords(
             ["almostthesame", "almostthesama"],
             input: .englishStrict
         ))
         
         XCTAssertGreaterThanOrEqual(
             report.similarWords.similarity,
-            SimilarWordsInput.defaultThreshold
+            BIP39WordList.Validation.WordSimilarity.Input.defaultThreshold
         )
     }
     
@@ -72,9 +72,9 @@ private extension MnemonizeTests {
         let word0 = vector.word0
         let word1 = vector.word1
         
-        let maxSimilarityThreshold = SimilarWordsInput.defaultThreshold
+        let maxSimilarityThreshold = BIP39WordList.Validation.WordSimilarity.Input.defaultThreshold
         
-        let similar = BIP39WordList.similar(
+        let similar = BIP39WordList.Validation.similar(
             word0: word0,
             word1: word1
         )
