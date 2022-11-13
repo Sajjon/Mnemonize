@@ -7,7 +7,7 @@ import New
 public struct Swedish: ParsableCommand {
 
     @Argument(help: "The Swedish Part of Speech tagged corpus file.")
-    var inputFile: String = "swedish_corpus_first_1k_lines.txt"
+    var inputFile: String = "swedish_corpus_first_10k_lines.txt"
     
     
     @Option(

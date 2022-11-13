@@ -41,6 +41,7 @@ public struct Choose: Sendable, Hashable {
     public enum Reason: String, Sendable, Hashable {
         case similar
         case ambigiousByFirstNLetters
+        case anotherFormOfSameWordExistsWithSamePOSTag
     }
 }
 
@@ -66,14 +67,12 @@ public extension Mnemonizer {
                 continue
             }
 
-            let wordsSoFar = OrderedSet<String>((parsedLines + [parsedLine]).map { $0.wordForm.lowercasedWord })
-            
-            func wordConflicts(
+            func lineConflicts(
                 reason similarityReason: Choose.Reason,
-                checkForConflict: (OrderedSet<String>) -> ConflictingWords?
+                checkForConflict: (OrderedSet<ParsedLine>, ParsedLine) -> ConflictingWords?
             ) -> Bool {
                 guard
-                    let conflict = checkForConflict(wordsSoFar),
+                    let conflict = checkForConflict(.init(parsedLines + [parsedLine]), parsedLine),
                     let reference = parsedLines.first(where: {
                         let needle = conflict.word0 == parsedLine.wordForm.lowercasedWord ? conflict.word1 : conflict.word0
                         return $0.wordForm.lowercasedWord == needle
@@ -91,10 +90,43 @@ public extension Mnemonizer {
                 return true
             }
             
+            func wordConflicts(
+                reason similarityReason: Choose.Reason,
+                checkForConflict: (OrderedSet<String>, ParsedLine) -> ConflictingWords?
+            ) -> Bool {
+                lineConflicts(
+                    reason: similarityReason,
+                    checkForConflict: { linesIncludingNew, new in
+                        checkForConflict(.init(linesIncludingNew.map { $0.wordForm.lowercasedWord }), new)
+                    })
+            }
+            
+            if
+                lineConflicts(reason: .anotherFormOfSameWordExistsWithSamePOSTag, checkForConflict: { _, newLine in
+                    // snart    AB.POS    |snart..ab.1|snar..av.1|
+                    parsedLines.compactMap({ existing -> ConflictingWords? in
+                        
+                        guard
+                            existing.partOfSpeechTag == newLine.partOfSpeechTag,
+                            existing.wordForm.lowercasedWord != newLine.wordForm.lowercasedWord,
+                            let match = newLine.lemgrams.contents.first(where: {
+                                $0.baseForm.word == existing.wordForm.lowercasedWord
+                        }) else {
+                            return nil
+                        }
+                        let conflictingWords = ConflictingWords(word0: match.baseForm.word, word1: newLine.wordForm.lowercasedWord)
+                        return conflictingWords
+                        
+                    }).first
+                })
+            {
+                continue
+            }
+            
             if
                 let input = bip39Validation.unambiguouslyIdentifiableInput,
-                wordConflicts(reason: .ambigiousByFirstNLetters, checkForConflict: {
-                    BIP39WordList.Validation.unambiguouslyIdentifiableByFirst(n: input, $0)
+                wordConflicts(reason: .ambigiousByFirstNLetters, checkForConflict: { wordsIncludingNew, newLine in
+                    BIP39WordList.Validation.unambiguouslyIdentifiableByFirst(n: input, wordsIncludingNew)
                 })
             {
                 continue
@@ -102,8 +134,8 @@ public extension Mnemonizer {
             
             if
                 let input = bip39Validation.similarWordsDetectionInput,
-                wordConflicts(reason: .similar, checkForConflict: {
-                    BIP39WordList.Validation.similarWords($0, input: input)?.conflictingWords
+                wordConflicts(reason: .similar, checkForConflict: { wordsIncludingNew, newLine in
+                    BIP39WordList.Validation.similarWords(wordsIncludingNew, input: input)?.conflictingWords
                 })
             {
                 continue
@@ -114,20 +146,38 @@ public extension Mnemonizer {
         }
         
         if
+            case let sameLemma = choices.filter({ $0.key.reason == .anotherFormOfSameWordExistsWithSamePOSTag }),
+            !sameLemma.isEmpty
+        {
+            print(
+                "\n\n🔮 CHOOSE BETWEEN WORDS OF SAME LEMMA AND POS TAG:\n" +
+                sameLemma
+                    .map {
+                        [
+                            "Alternatives to '\($0.key.reference.wordForm.lowercasedWord)': ",
+                            $0.value.map { "'\($0.wordForm.lowercasedWord)'" }.joined(separator: ", ")
+                        ].joined()
+                    }.joined(separator: "\n")
+            )
+        } else {
+            print("✨ No words of same lemma and POSTag found.")
+        }
+        
+        if
             case let amb = choices
                 .filter({ $0.key.reason == .ambigiousByFirstNLetters }),
             !amb.isEmpty
         {
-//            print(
-//                "\n\n🔮 CHOOSE BETWEEN AMBIGIOUS WORDS:\n" +
-//                amb
-//                    .map {
-//                        [
-//                            "Ref: '\($0.key.reference.wordForm.lowercasedWord)' - alternatives",
-//                            $0.value.map { $0.wordForm.lowercasedWord }.joined(separator: "\n\t")
-//                        ].joined(separator: "\n")
-//                    }.joined(separator: "\n\n")
-//            )
+            print(
+                "\n\n🔮 CHOOSE BETWEEN AMBIGIOUS WORDS:\n" +
+                amb
+                    .map {
+                        [
+                            "Alternatives to '\($0.key.reference.wordForm.lowercasedWord)': ",
+                            $0.value.map { "'\($0.wordForm.lowercasedWord)'" }.joined(separator: ", ")
+                        ].joined()
+                    }.joined(separator: "\n")
+            )
         } else {
             print("✨ No ambigious words found.")
         }
@@ -141,10 +191,10 @@ public extension Mnemonizer {
                 sim
                     .map {
                         [
-                            "Ref: '\($0.key.reference.wordForm.lowercasedWord)' - alternatives",
-                            $0.value.map { $0.wordForm.lowercasedWord }.joined(separator: "\n\t")
-                        ].joined(separator: "\n")
-                    }.joined(separator: "\n\n")
+                            "Alternatives to '\($0.key.reference.wordForm.lowercasedWord)': ",
+                            $0.value.map { "'\($0.wordForm.lowercasedWord)'" }.joined(separator: ", ")
+                        ].joined()
+                    }.joined(separator: "\n")
             )
         } else {
             print("✨ No similar words found.")
